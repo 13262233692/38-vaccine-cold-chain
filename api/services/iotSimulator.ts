@@ -13,7 +13,7 @@ const VEHICLE_PROFILES: Record<string, { baseTemp: number; variance: number; dri
   'VH-006': { baseTemp: 9.5, variance: 2.0, driftChance: 0.7 },
 };
 
-function generateReading(vehicleId: string) {
+async function generateReading(vehicleId: string) {
   const vehicle = getAllVehicles().find((v) => v.id === vehicleId);
   if (!vehicle) return;
 
@@ -40,9 +40,12 @@ function generateReading(vehicleId: string) {
   }
 
   try {
-    processIoTReport(vehicleId, vehicle.batchNo, readings);
+    const result = await processIoTReport(vehicleId, vehicle.batchNo, readings);
+    if (result.fabricFailed) {
+      // silently continue - the SSE broadcast already handles degraded mode
+    }
   } catch (err) {
-    console.error(`IoT simulator error for ${vehicleId}:`, err);
+    console.error(`IoT simulator error for ${vehicleId}:`, (err as Error).message);
   }
 }
 
@@ -53,7 +56,11 @@ export function startSimulator(intervalMs: number = 3000): void {
   const vehicleIds = getAllVehicles().map((v) => v.id);
 
   simulatorInterval = setInterval(() => {
-    vehicleIds.forEach((id) => generateReading(id));
+    vehicleIds.forEach((id) => {
+      generateReading(id).catch((err) => {
+        console.error(`Simulator unhandled error for ${id}:`, err);
+      });
+    });
   }, intervalMs);
 
   console.log(`IoT simulator started with ${vehicleIds.length} vehicles, interval ${intervalMs}ms`);

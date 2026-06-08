@@ -79,6 +79,15 @@ export function getAverageTemperature(): number {
   return all.reduce((sum, v) => sum + v.lastTemperature, 0) / all.length;
 }
 
+export function removeAlert(id: string): boolean {
+  const idx = alerts.findIndex((a) => a.id === id);
+  if (idx !== -1) {
+    alerts.splice(idx, 1);
+    return true;
+  }
+  return false;
+}
+
 export function getActiveAlertCount(): number {
   return alerts.filter((a) => !a.acknowledged).length;
 }

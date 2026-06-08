@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SSEEventData, Vehicle, AlertRecord, TemperatureSnapshot, Batch } from '../../shared/types';
+import type { SSEEventData, Vehicle, AlertRecord, TemperatureSnapshot, Batch, CircuitBreakerSSEData } from '../../shared/types';
 
 interface AppState {
   vehicles: Vehicle[];
@@ -11,6 +11,7 @@ interface AppState {
   alertVehicleId: string | null;
   sseConnected: boolean;
   chainHeight: number;
+  circuitBreaker: CircuitBreakerSSEData | null;
 
   setVehicles: (vehicles: Vehicle[]) => void;
   updateVehicleFromSSE: (data: SSEEventData) => void;
@@ -21,6 +22,7 @@ interface AppState {
   setAlertActive: (active: boolean, vehicleId?: string | null) => void;
   setSseConnected: (connected: boolean) => void;
   setChainHeight: (height: number) => void;
+  setCircuitBreaker: (data: CircuitBreakerSSEData) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -33,6 +35,7 @@ export const useStore = create<AppState>((set) => ({
   alertVehicleId: null,
   sseConnected: false,
   chainHeight: 0,
+  circuitBreaker: null,
 
   setVehicles: (vehicles) => set({ vehicles }),
 
@@ -70,4 +73,6 @@ export const useStore = create<AppState>((set) => ({
   setSseConnected: (sseConnected) => set({ sseConnected }),
 
   setChainHeight: (chainHeight) => set({ chainHeight }),
+
+  setCircuitBreaker: (circuitBreaker) => set({ circuitBreaker }),
 }));

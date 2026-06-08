@@ -73,9 +73,18 @@ export interface SSEEventData {
 }
 
 export type SSEEvent = {
-  type: 'temperature' | 'alert' | 'blockchain';
+  type: 'temperature' | 'alert' | 'blockchain' | 'circuit_breaker';
   data: SSEEventData;
 };
+
+export interface CircuitBreakerSSEData {
+  circuitName: string;
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  failureCount: number;
+  totalRejected: number;
+  totalTimeouts: number;
+  timestamp: number;
+}
 
 export interface VerifyRequest {
   originalData: string;

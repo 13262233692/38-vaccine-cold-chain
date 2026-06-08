@@ -1,10 +1,15 @@
 import { useStore } from '@/store/useStore';
-import { Truck, Wifi, WifiOff, Thermometer, AlertTriangle, Link } from 'lucide-react';
+import { Truck, Wifi, WifiOff, Thermometer, AlertTriangle, Link, ShieldAlert, ShieldCheck, Shield } from 'lucide-react';
 
 export default function StatusBar() {
-  const { vehicles, sseConnected, isAlertActive } = useStore();
+  const { vehicles, sseConnected, isAlertActive, circuitBreaker } = useStore();
   const onlineCount = vehicles.filter((v) => Date.now() - v.lastReportTime < 30000).length;
   const alertCount = vehicles.filter((v) => v.status === 'danger').length;
+
+  const cbState = circuitBreaker?.state || 'CLOSED';
+  const CbIcon = cbState === 'CLOSED' ? ShieldCheck : cbState === 'OPEN' ? ShieldAlert : Shield;
+  const cbColor = cbState === 'CLOSED' ? 'text-safe-green' : cbState === 'OPEN' ? 'text-alert-red' : 'text-warn-amber';
+  const cbLabel = cbState === 'CLOSED' ? '熔断器正常' : cbState === 'OPEN' ? '熔断器断开' : '熔断器探测中';
 
   return (
     <div className="h-12 bg-deep-space-light border-b border-panel-border flex items-center justify-between px-6">
@@ -39,6 +44,14 @@ export default function StatusBar() {
           <span className="text-safe-green font-mono font-semibold">{vehicles.length}</span>
         </div>
 
+        <div className="flex items-center gap-1.5 text-sm font-body">
+          {CbIcon && <CbIcon className={`w-4 h-4 ${cbColor} ${cbState === 'OPEN' ? 'animate-pulse' : ''}`} />}
+          <span className={`text-xs ${cbColor}`}>{cbLabel}</span>
+          {circuitBreaker && circuitBreaker.failureCount > 0 && (
+            <span className="text-[10px] text-gray-600 font-mono">({circuitBreaker.failureCount}F / {circuitBreaker.totalRejected}R)</span>
+          )}
+        </div>
+
         <div className="flex items-center gap-2 text-sm font-body">
           {sseConnected ? (
             <Wifi className="w-4 h-4 text-safe-green animate-pulse" />
@@ -57,6 +70,9 @@ export default function StatusBar() {
 
       {isAlertActive && (
         <div className="absolute top-0 left-0 right-0 h-1 bg-alert-red alert-pulse" />
+      )}
+      {cbState === 'OPEN' && !isAlertActive && (
+        <div className="absolute top-0 left-0 right-0 h-1 bg-warn-amber alert-pulse" />
       )}
     </div>
   );

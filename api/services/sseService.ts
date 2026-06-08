@@ -1,7 +1,9 @@
 import type { Response } from 'express';
 import { submitToChain } from './fabricService.js';
-import { getVehicle, updateVehicle, addAlert } from '../repository/dataStore.js';
+import { getVehicle, updateVehicle, addAlert, removeAlert } from '../repository/dataStore.js';
 import type { SSEEvent } from '../../shared/types.js';
+import { executeWithTransaction, createTransactionContext, type TransactionContext } from '../resilience/TransactionManager.js';
+import { isBlockchainException, TransactionRollbackException, CircuitBreakerOpenException } from '../errors/BlockchainException.js';
 
 const sseClients: Set<Response> = new Set();
 
@@ -23,11 +25,20 @@ export function broadcastSSE(event: SSEEvent): void {
   });
 }
 
-export function processIoTReport(
+interface ProcessingResult {
+  hash?: string;
+  blockNumber?: number;
+  isOverTemp: boolean;
+  consecutiveOverTemp: number;
+  fabricFailed: boolean;
+  fabricError?: string;
+}
+
+export async function processIoTReport(
   vehicleId: string,
   batchNo: string,
   readings: { timestamp: number; temperature: number; humidity: number; probeId: string }[]
-): { hash: string; blockNumber: number; isOverTemp: boolean; consecutiveOverTemp: number } {
+): Promise<ProcessingResult> {
   const vehicle = getVehicle(vehicleId);
   if (!vehicle) {
     throw new Error(`Vehicle ${vehicleId} not found`);
@@ -40,9 +51,8 @@ export function processIoTReport(
   const avgHumidity = readings.reduce((a, b) => a + b.humidity, 0) / readings.length;
   const now = Date.now();
 
-  const snapshot = submitToChain(tempMin, tempMax, batchNo, vehicleId, avgHumidity, now);
-
   const isOverTemp = avgTemp < 2 || avgTemp > 8;
+  const prevConsecutiveOverTemp = vehicle.consecutiveOverTemp;
   let consecutiveOverTemp = isOverTemp ? vehicle.consecutiveOverTemp + 1 : 0;
 
   let status: 'safe' | 'warning' | 'danger' = 'safe';
@@ -52,77 +62,140 @@ export function processIoTReport(
     status = 'warning';
   }
 
-  vehicle.lastTemperature = Math.round(avgTemp * 10) / 10;
-  vehicle.lastHumidity = Math.round(avgHumidity * 10) / 10;
-  vehicle.consecutiveOverTemp = consecutiveOverTemp;
-  vehicle.status = status;
-  vehicle.lastReportTime = now;
-  vehicle.batchNo = batchNo;
-  updateVehicle(vehicle);
+  const originalVehicle = { ...vehicle };
 
-  broadcastSSE({
-    type: 'temperature',
-    data: {
-      vehicleId,
-      batchNo,
-      temperature: vehicle.lastTemperature,
-      humidity: vehicle.lastHumidity,
-      timestamp: now,
-      isOverTemp,
-      consecutiveOverTemp,
-      hash: snapshot.hash,
-      blockNumber: snapshot.blockNumber,
-    },
-  });
+  let snapshotHash: string | undefined;
+  let snapshotBlock: number | undefined;
+  let fabricFailed = false;
+  let fabricError: string | undefined;
 
-  if (consecutiveOverTemp >= 3) {
-    const alertReadings = readings.slice(-3).map((r) => ({
-      temperature: r.temperature,
-      timestamp: r.timestamp,
-    }));
+  try {
+    const result = await executeWithTransaction(
+      async (ctx) => {
+        vehicle.lastTemperature = Math.round(avgTemp * 10) / 10;
+        vehicle.lastHumidity = Math.round(avgHumidity * 10) / 10;
+        vehicle.consecutiveOverTemp = consecutiveOverTemp;
+        vehicle.status = status;
+        vehicle.lastReportTime = now;
+        vehicle.batchNo = batchNo;
+        updateVehicle(vehicle);
+      },
+      async (ctx) => {
+        const snapshot = await submitToChain(tempMin, tempMax, batchNo, vehicleId, avgHumidity, now);
+        snapshotHash = snapshot.hash;
+        snapshotBlock = snapshot.blockNumber;
+        return snapshot;
+      },
+      async (ctx) => {
+        vehicle.lastTemperature = originalVehicle.lastTemperature;
+        vehicle.lastHumidity = originalVehicle.lastHumidity;
+        vehicle.consecutiveOverTemp = originalVehicle.consecutiveOverTemp;
+        vehicle.status = originalVehicle.status;
+        vehicle.lastReportTime = originalVehicle.lastReportTime;
+        vehicle.batchNo = originalVehicle.batchNo;
+        updateVehicle(vehicle);
 
-    addAlert({
-      id: `alert_${now}_${vehicleId}`,
-      vehicleId,
-      batchNo,
-      readings: alertReadings,
-      triggeredAt: now,
-      acknowledged: false,
-    });
+        console.warn(`[TransactionManager] Rolled back vehicle ${vehicleId} DB state (Fabric call failed)`);
+      }
+    );
+  } catch (err) {
+    if (err instanceof TransactionRollbackException || isBlockchainException(err)) {
+      fabricFailed = true;
+      fabricError = (err as Error).message;
 
+      if (isBlockchainException(err) && !fabricFailed) {
+        vehicle.lastTemperature = Math.round(avgTemp * 10) / 10;
+        vehicle.lastHumidity = Math.round(avgHumidity * 10) / 10;
+        vehicle.lastReportTime = now;
+        updateVehicle(vehicle);
+      }
+
+      console.warn(`[SSE Service] Fabric operation failed for ${vehicleId}: ${fabricError}`);
+    } else {
+      throw err;
+    }
+  }
+
+  if (!fabricFailed) {
     broadcastSSE({
-      type: 'alert',
+      type: 'temperature',
       data: {
         vehicleId,
         batchNo,
         temperature: vehicle.lastTemperature,
         humidity: vehicle.lastHumidity,
         timestamp: now,
-        isOverTemp: true,
+        isOverTemp,
         consecutiveOverTemp,
+        hash: snapshotHash,
+        blockNumber: snapshotBlock,
+      },
+    });
+
+    if (consecutiveOverTemp >= 3) {
+      const alertReadings = readings.slice(-3).map((r) => ({
+        temperature: r.temperature,
+        timestamp: r.timestamp,
+      }));
+
+      addAlert({
+        id: `alert_${now}_${vehicleId}`,
+        vehicleId,
+        batchNo,
+        readings: alertReadings,
+        triggeredAt: now,
+        acknowledged: false,
+      });
+
+      broadcastSSE({
+        type: 'alert',
+        data: {
+          vehicleId,
+          batchNo,
+          temperature: vehicle.lastTemperature,
+          humidity: vehicle.lastHumidity,
+          timestamp: now,
+          isOverTemp: true,
+          consecutiveOverTemp,
+        },
+      });
+    }
+
+    broadcastSSE({
+      type: 'blockchain',
+      data: {
+        vehicleId,
+        batchNo,
+        temperature: vehicle.lastTemperature,
+        humidity: vehicle.lastHumidity,
+        timestamp: now,
+        isOverTemp,
+        consecutiveOverTemp,
+        hash: snapshotHash,
+        blockNumber: snapshotBlock,
+      },
+    });
+  } else {
+    broadcastSSE({
+      type: 'temperature',
+      data: {
+        vehicleId,
+        batchNo,
+        temperature: vehicle.lastTemperature,
+        humidity: vehicle.lastHumidity,
+        timestamp: now,
+        isOverTemp,
+        consecutiveOverTemp: vehicle.consecutiveOverTemp,
       },
     });
   }
 
-  broadcastSSE({
-    type: 'blockchain',
-    data: {
-      vehicleId,
-      batchNo,
-      temperature: vehicle.lastTemperature,
-      humidity: vehicle.lastHumidity,
-      timestamp: now,
-      isOverTemp,
-      consecutiveOverTemp,
-      hash: snapshot.hash,
-      blockNumber: snapshot.blockNumber,
-    },
-  });
-
   return {
-    hash: snapshot.hash,
-    blockNumber: snapshot.blockNumber,
+    hash: snapshotHash,
+    blockNumber: snapshotBlock,
     isOverTemp,
-    consecutiveOverTemp,
+    consecutiveOverTemp: vehicle.consecutiveOverTemp,
+    fabricFailed,
+    fabricError,
   };
 }
