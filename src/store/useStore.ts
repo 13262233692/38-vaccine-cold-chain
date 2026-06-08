@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SSEEventData, Vehicle, AlertRecord, TemperatureSnapshot, Batch, CircuitBreakerSSEData } from '../../shared/types';
+import type { SSEEventData, Vehicle, AlertRecord, TemperatureSnapshot, Batch, CircuitBreakerSSEData, MKTResult, InvalidationRecord } from '../../shared/types';
 
 interface AppState {
   vehicles: Vehicle[];
@@ -12,6 +12,10 @@ interface AppState {
   sseConnected: boolean;
   chainHeight: number;
   circuitBreaker: CircuitBreakerSSEData | null;
+  mktResults: Map<string, MKTResult>;
+  invalidations: InvalidationRecord[];
+  mktReportVisible: boolean;
+  mktReportBatchNo: string | null;
 
   setVehicles: (vehicles: Vehicle[]) => void;
   updateVehicleFromSSE: (data: SSEEventData) => void;
@@ -21,8 +25,12 @@ interface AppState {
   setSelectedVehicleId: (id: string | null) => void;
   setAlertActive: (active: boolean, vehicleId?: string | null) => void;
   setSseConnected: (connected: boolean) => void;
-  setChainHeight: (height: number) => void;
+  setChainHeight: (chainHeight: number) => void;
   setCircuitBreaker: (data: CircuitBreakerSSEData) => void;
+  setMktResult: (result: MKTResult) => void;
+  addInvalidation: (record: InvalidationRecord) => void;
+  showMktReport: (batchNo: string) => void;
+  hideMktReport: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -36,6 +44,10 @@ export const useStore = create<AppState>((set) => ({
   sseConnected: false,
   chainHeight: 0,
   circuitBreaker: null,
+  mktResults: new Map(),
+  invalidations: [],
+  mktReportVisible: false,
+  mktReportBatchNo: null,
 
   setVehicles: (vehicles) => set({ vehicles }),
 
@@ -75,4 +87,18 @@ export const useStore = create<AppState>((set) => ({
   setChainHeight: (chainHeight) => set({ chainHeight }),
 
   setCircuitBreaker: (circuitBreaker) => set({ circuitBreaker }),
+
+  setMktResult: (result) =>
+    set((state) => {
+      const mktResults = new Map(state.mktResults);
+      mktResults.set(result.batchNo, result);
+      return { mktResults };
+    }),
+
+  addInvalidation: (record) =>
+    set((state) => ({ invalidations: [record, ...state.invalidations] })),
+
+  showMktReport: (batchNo) => set({ mktReportVisible: true, mktReportBatchNo: batchNo }),
+
+  hideMktReport: () => set({ mktReportVisible: false, mktReportBatchNo: null }),
 }));

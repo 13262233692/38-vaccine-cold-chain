@@ -1,8 +1,8 @@
 import { useStore } from '@/store/useStore';
-import { X, Thermometer, Droplets, FileCode, Clock } from 'lucide-react';
+import { X, Thermometer, Droplets, FileCode, Clock, FlaskConical } from 'lucide-react';
 
 export default function VehicleDetail() {
-  const { selectedVehicleId, vehicles, setSelectedVehicleId } = useStore();
+  const { selectedVehicleId, vehicles, setSelectedVehicleId, showMktReport, invalidations } = useStore();
 
   if (!selectedVehicleId) return null;
 
@@ -12,6 +12,7 @@ export default function VehicleDetail() {
   const statusColor = vehicle.status === 'danger' ? 'text-alert-red' : vehicle.status === 'warning' ? 'text-warn-amber' : 'text-safe-green';
   const statusBg = vehicle.status === 'danger' ? 'border-alert-red/40' : vehicle.status === 'warning' ? 'border-warn-amber/40' : 'border-safe-green/40';
   const statusText = vehicle.status === 'danger' ? '超温告警' : vehicle.status === 'warning' ? '温度偏离' : '温区正常';
+  const isInvalidated = invalidations.some((r) => r.batchNo === vehicle.batchNo);
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSelectedVehicleId(null)}>
@@ -82,10 +83,21 @@ export default function VehicleDetail() {
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-panel-border">
+        <div className="mt-4 pt-3 border-t border-panel-border flex items-center justify-between">
           <p className="text-gray-500 text-xs font-body">
             🚛 车辆 {vehicle.id} | 批次 {vehicle.batchNo} | 黄金温区 2-8°C
           </p>
+          <button
+            onClick={() => { showMktReport(vehicle.batchNo); setSelectedVehicleId(null); }}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-display transition-all ${
+              isInvalidated
+                ? 'bg-alert-red/20 border border-alert-red/40 text-alert-red'
+                : 'bg-ice-blue/10 border border-ice-blue/30 text-ice-blue hover:bg-ice-blue/20'
+            }`}
+          >
+            <FlaskConical className="w-3 h-3" />
+            {isInvalidated ? '已作废' : 'MKT评估'}
+          </button>
         </div>
       </div>
     </div>

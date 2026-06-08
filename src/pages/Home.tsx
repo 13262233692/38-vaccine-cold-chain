@@ -7,6 +7,7 @@ import TopologyMap from '@/components/TopologyMap';
 import BatchPanel from '@/components/BatchPanel';
 import AlertOverlay from '@/components/AlertOverlay';
 import VehicleDetail from '@/components/VehicleDetail';
+import MktReport from '@/components/MktReport';
 
 export default function Home() {
   const { setVehicles, sseConnected } = useStore();
@@ -55,6 +56,7 @@ export default function Home() {
 
       <AlertOverlay />
       <VehicleDetail />
+      <MktReport />
     </div>
   );
 }

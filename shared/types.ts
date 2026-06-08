@@ -73,7 +73,7 @@ export interface SSEEventData {
 }
 
 export type SSEEvent = {
-  type: 'temperature' | 'alert' | 'blockchain' | 'circuit_breaker';
+  type: 'temperature' | 'alert' | 'blockchain' | 'circuit_breaker' | 'mkt_result';
   data: SSEEventData;
 };
 
@@ -95,4 +95,39 @@ export interface VerifyResponse {
   valid: boolean;
   computedHash: string;
   providedHash: string;
+}
+
+export interface MKTComputationStep {
+  step: string;
+  formula: string;
+  value: string;
+}
+
+export interface MKTResult {
+  batchNo: string;
+  mktCelsius: number;
+  mktKelvin: number;
+  thresholdCelsius: number;
+  thresholdKelvin: number;
+  exceedsThreshold: boolean;
+  sampleCount: number;
+  durationHours: number;
+  minTempCelsius: number;
+  maxTempCelsius: number;
+  avgTempCelsius: number;
+  overTempReadings: number;
+  computationSteps: MKTComputationStep[];
+  timestamp: number;
+}
+
+export interface InvalidationRecord {
+  id: string;
+  batchNo: string;
+  mktCelsius: number;
+  thresholdCelsius: number;
+  decision: 'COMPLIANCE_VOIDED';
+  evidence: MKTResult;
+  hash: string;
+  blockNumber: number;
+  timestamp: number;
 }

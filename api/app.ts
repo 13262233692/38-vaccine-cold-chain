@@ -10,6 +10,7 @@ import sseRoutes from './routes/sse.js'
 import alertRoutes from './routes/alerts.js'
 import auditRoutes from './routes/audit.js'
 import resilienceRoutes from './routes/resilience.js'
+import mktRoutes from './routes/mkt.js'
 import { initStore } from './repository/dataStore.js'
 import { concurrencyLimiter, requestTimeout, poolMetricsLogger } from './middleware/resilience.js'
 import { getSystemHealth, startPoolCleanup } from './resilience/TransactionManager.js'
@@ -34,6 +35,7 @@ app.use('/api/sse', sseRoutes)
 app.use('/api/alerts', alertRoutes)
 app.use('/api/audit', auditRoutes)
 app.use('/api/resilience', resilienceRoutes)
+app.use('/api/mkt', mktRoutes)
 
 app.get('/api/health', (_req: Request, res: Response) => {
   const health = getSystemHealth();

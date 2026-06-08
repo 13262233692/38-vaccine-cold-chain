@@ -93,7 +93,7 @@ export async function executeWithTransaction<TDb, TFabric>(
     }
 
     ctx.committed = true;
-    return fabricResult ?? dbResult;
+    return fabricResult;
   } catch (err) {
     if (!ctx.rolledBack && !ctx.committed) {
       try {
