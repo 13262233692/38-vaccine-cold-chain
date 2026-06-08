@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Source Sans 3', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 2px;
+}
+
+body {
+  overflow: hidden;
+}
+
+@layer components {
+  .panel {
+    @apply bg-panel-bg backdrop-blur-md border border-panel-border rounded-lg;
+  }
+
+  .panel-header {
+    @apply font-display text-sm tracking-wider uppercase text-ice-blue border-b border-panel-border px-4 py-2;
+  }
+
+  .kpi-card {
+    @apply panel p-4 transition-all duration-300;
+  }
+
+  .kpi-card:hover {
+    @apply border-ice-blue shadow-lg shadow-ice-blue-glow;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+
+  .alert-pulse {
+    animation: alertPulse 0.5s ease-in-out infinite alternate;
+  }
+
+  .node-safe {
+    filter: drop-shadow(0 0 6px #00E676);
+  }
+
+  .node-warning {
+    filter: drop-shadow(0 0 6px #FFB300);
+  }
+
+  .node-danger {
+    filter: drop-shadow(0 0 8px #FF2D55);
+    animation: dangerPulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes alertPulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes dangerPulse {
+  0%, 100% { filter: drop-shadow(0 0 8px #FF2D55); }
+  50% { filter: drop-shadow(0 0 20px #FF2D55) drop-shadow(0 0 40px rgba(255, 45, 85, 0.5)); }
+}
